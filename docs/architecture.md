@@ -44,21 +44,23 @@ Detailed component documentation for the Intervals.icu MCP server.
 
 Credentials are resolved **per request**, so a single HTTP deployment can serve
 multiple athletes. `apply_header_credentials()` (in `auth.py`) layers per-request
-HTTP headers on top of the env-var-derived `ICUConfig`:
+query params and HTTP headers on top of the env-var-derived `ICUConfig`:
 
-| Header (case-insensitive) | Overrides config field |
-|---|---|
-| `X-Intervals-Api-Key` | `intervals_icu_api_key` |
-| `X-Intervals-Athlete-Id` | `intervals_icu_athlete_id` |
+| Source | API key | Athlete ID → config field |
+|---|---|---|
+| Query param | `api_key` | `athlete_id` → `intervals_icu_athlete_id` |
+| Header (case-insensitive) | `X-Intervals-Api-Key` | `X-Intervals-Athlete-Id` → `intervals_icu_athlete_id` |
+| Env var (fallback) | `INTERVALS_ICU_API_KEY` | `INTERVALS_ICU_ATHLETE_ID` |
 
-Resolution priority is **header → env var fallback**. A present, non-empty header
-wins; absent or empty headers leave the env value in place. `intervals_icu_delete_mode`
-is a startup/env concern and is never affected by headers.
+Resolution priority **per field** is **query param → header → env var**. A present,
+non-empty value wins; absent or empty values fall through to the next source.
+`intervals_icu_delete_mode` is a startup/env concern and is never affected.
 
-Headers are read via FastMCP's `get_http_headers()`, which returns `{}` for
-non-HTTP transports (e.g. stdio) and never raises — so stdio and single-tenant
-env-only setups behave exactly as before. The resolution happens in
-`ConfigMiddleware` for tool calls, and inline in the
+Headers are read via FastMCP's `get_http_headers()`; query params via the
+`get_http_query_params()` helper in `middleware.py` (wraps `get_http_request()`).
+Both return empty for non-HTTP transports (e.g. stdio) and never raise — so stdio
+and single-tenant env-only setups behave exactly as before. The resolution happens
+in `ConfigMiddleware` for tool calls, and inline in the
 `intervals-icu://athlete/profile` resource (resources bypass middleware).
 
 The per-tool `athlete_id` parameter still composes on top of this: the header sets

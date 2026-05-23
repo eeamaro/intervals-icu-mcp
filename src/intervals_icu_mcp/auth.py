@@ -12,10 +12,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 DeleteMode = Literal["safe", "full", "none"]
 VALID_DELETE_MODES: tuple[DeleteMode, ...] = ("safe", "full", "none")
 
-# Per-request HTTP headers that override env-var credentials, enabling a single
-# deploy to serve multiple athletes. Compared case-insensitively.
+# Per-request credentials override env vars, enabling a single deploy to serve
+# multiple athletes. Resolution priority: query params > headers > env vars.
+# Header lookup is case-insensitive (HTTP headers are case-insensitive).
 HEADER_API_KEY = "x-intervals-api-key"
 HEADER_ATHLETE_ID = "x-intervals-athlete-id"
+QUERY_API_KEY = "api_key"
+QUERY_ATHLETE_ID = "athlete_id"
 
 
 class ICUConfig(BaseSettings):
@@ -56,25 +59,34 @@ def load_config() -> ICUConfig:
     return ICUConfig()
 
 
-def apply_header_credentials(config: ICUConfig, headers: Mapping[str, str]) -> ICUConfig:
-    """Override credentials from per-request HTTP headers, falling back to ``config``.
+def apply_header_credentials(
+    config: ICUConfig,
+    headers: Mapping[str, str],
+    query_params: Mapping[str, str] | None = None,
+) -> ICUConfig:
+    """Override credentials from per-request query params / HTTP headers.
 
-    Header values take priority over the env-var-derived ``config``. Absent or
-    empty-string headers leave the corresponding value untouched. Header-name
-    lookup is case-insensitive. ``intervals_icu_delete_mode`` is never affected.
+    Resolution priority per field: query param (``api_key`` / ``athlete_id``) >
+    header (``X-Intervals-Api-Key`` / ``X-Intervals-Athlete-Id``) > the
+    env-var-derived ``config``. Absent or empty-string values fall through to the
+    next source. Header-name lookup is case-insensitive.
+    ``intervals_icu_delete_mode`` is never affected.
 
     Args:
         config: Base configuration (typically loaded from env vars).
         headers: Incoming request headers (e.g. from ``get_http_headers()``).
+        query_params: Incoming request query params (e.g. from
+            ``get_http_request().query_params``).
 
     Returns:
-        An ICUConfig with header overrides applied, or ``config`` unchanged when
-        no relevant headers are present.
+        An ICUConfig with overrides applied, or ``config`` unchanged when no
+        relevant query params or headers are present.
     """
     lowered = {key.lower(): value for key, value in headers.items()}
+    params = query_params or {}
     updates: dict[str, str] = {}
-    api_key = lowered.get(HEADER_API_KEY)
-    athlete_id = lowered.get(HEADER_ATHLETE_ID)
+    api_key = params.get(QUERY_API_KEY) or lowered.get(HEADER_API_KEY)
+    athlete_id = params.get(QUERY_ATHLETE_ID) or lowered.get(HEADER_ATHLETE_ID)
     if api_key:
         updates["intervals_icu_api_key"] = api_key
     if athlete_id:

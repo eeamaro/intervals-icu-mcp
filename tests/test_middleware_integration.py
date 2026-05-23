@@ -173,3 +173,46 @@ class TestHeaderCredentialResolution:
 
             assert data["api_key"] == "header_key"
             assert data["athlete_id"] == "i_header"
+
+
+class TestQueryParamCredentialResolution:
+    """Test per-request query-param overrides through the real middleware pipeline.
+
+    The in-memory transport has no HTTP layer, so we patch the middleware's
+    ``get_http_query_params`` (and ``get_http_headers``) to simulate a request.
+    """
+
+    async def test_query_params_override_env(self, integration_server, monkeypatch):
+        """?api_key=...&athlete_id=... take priority over the configured env vars."""
+        monkeypatch.setattr(
+            "intervals_icu_mcp.middleware.get_http_query_params",
+            lambda *a, **k: {"api_key": "query_key", "athlete_id": "i_query"},
+        )
+
+        async with Client(integration_server) as client:
+            result = await client.call_tool("inspect_config")
+            data = json.loads(result.data)
+
+            assert data["api_key"] == "query_key"
+            assert data["athlete_id"] == "i_query"
+
+    async def test_query_params_win_over_headers(self, integration_server, monkeypatch):
+        """Query params outrank headers when both are present."""
+        monkeypatch.setattr(
+            "intervals_icu_mcp.middleware.get_http_headers",
+            lambda *a, **k: {
+                "x-intervals-api-key": "header_key",
+                "x-intervals-athlete-id": "i_header",
+            },
+        )
+        monkeypatch.setattr(
+            "intervals_icu_mcp.middleware.get_http_query_params",
+            lambda *a, **k: {"api_key": "query_key", "athlete_id": "i_query"},
+        )
+
+        async with Client(integration_server) as client:
+            result = await client.call_tool("inspect_config")
+            data = json.loads(result.data)
+
+            assert data["api_key"] == "query_key"
+            assert data["athlete_id"] == "i_query"

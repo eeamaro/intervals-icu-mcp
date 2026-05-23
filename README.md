@@ -233,14 +233,15 @@ intervals-icu-mcp --transport sse --host 127.0.0.1 --port 8000
 
 ### Multi-tenant (per-request credentials)
 
-Over an HTTP transport, each request can carry its own credentials via headers, so a single deploy can serve many athletes:
+Over an HTTP transport, each request can carry its own credentials, so a single deploy can serve many athletes. Credentials are resolved **per request** with priority **query params > headers > env vars**:
 
-| Header | Overrides |
-|---|---|
-| `X-Intervals-Api-Key` | `INTERVALS_ICU_API_KEY` |
-| `X-Intervals-Athlete-Id` | `INTERVALS_ICU_ATHLETE_ID` |
+| Source | API key | Athlete ID |
+|---|---|---|
+| Query param | `?api_key=...` | `?athlete_id=...` |
+| Header | `X-Intervals-Api-Key` | `X-Intervals-Athlete-Id` |
+| Env var (fallback) | `INTERVALS_ICU_API_KEY` | `INTERVALS_ICU_ATHLETE_ID` |
 
-Headers take priority and are resolved **per request**; when absent, the server falls back to the env vars (so stdio and single-tenant setups are unchanged). The same security warning above applies — terminate TLS and authenticate at a proxy, and treat these headers as secrets. See [docs/architecture.md](docs/architecture.md) for details.
+When none are supplied, the server falls back to the env vars (so stdio and single-tenant setups are unchanged). The same security warning above applies — terminate TLS and authenticate at a proxy, and treat both headers and query params as secrets (query strings are especially prone to leaking into logs). See [docs/architecture.md](docs/architecture.md) for details.
 
 ## Usage
 

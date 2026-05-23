@@ -647,11 +647,14 @@ async def athlete_profile_resource() -> str:
 
     from .auth import apply_header_credentials, load_config
     from .client import ICUAPIError, ICUClient
+    from .middleware import get_http_query_params
     from .response_builder import ResponseBuilder
 
     # Resources don't go through middleware, so resolve credentials here too:
-    # env vars as the base, overridden by per-request headers (multi-tenant).
-    config = apply_header_credentials(load_config(), get_http_headers())
+    # env vars as the base, overridden by per-request query params / headers.
+    config = apply_header_credentials(
+        load_config(), get_http_headers(), get_http_query_params()
+    )
 
     try:
         async with ICUClient(config) as client:
